@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Adversary — A Maze</title>
+<style>
+  :root{
+    --accent:#4fa3d1;
+    --wall:#2b2f3a;
+    --bg:#12141c;
+    --panel:#1a1e29;
+    --text:#e8e8ef;
+    --muted:#8b8fa3;
+    --player:#3fa9f7;
+    --chaser:#ff4444;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:Georgia, 'Times New Roman', serif;
+    background:radial-gradient(circle at 50% 0%, #1b1f2b, var(--bg));
+    color:var(--text);
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:24px;
+  }
+  body.madman-mode #maze{ animation:jitter 2.6s infinite ease-in-out; }
+  @keyframes jitter{
+    0%,100%{ transform:translate(0,0) rotate(0deg); }
+    25%{ transform:translate(1px,-1px) rotate(-0.3deg); }
+    50%{ transform:translate(-1px,1px) rotate(0.3deg); }
+    75%{ transform:translate(1px,1px) rotate(-0.2deg); }
+  }
+  @keyframes pulse{
+    0%,100%{ transform:scale(1); }
+    50%{ transform:scale(1.35); }
+  }
+
+  h1{ font-size:1.4rem; margin:0 0 4px 0; letter-spacing:0.5px; }
+  .sub{ color:var(--muted); font-size:0.85rem; margin-bottom:18px; }
+
+  .layout{
+    display:flex;
+    gap:20px;
+    max-width:920px;
+    width:100%;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+
+  .panel{
+    background:var(--panel);
+    border-radius:16px;
+    padding:18px 20px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.35);
+    border:1px solid #262b38;
+  }
+
+  #sidebar{ width:270px; }
+  .hud-row{ display:flex; justify-content:space-between; font-size:0.9rem; margin:6px 0; }
+  .hud-row span:first-child{ color:var(--muted); }
+  .hud-value{ color:var(--accent); font-weight:bold; }
+
+  #threat{
+    display:none;
+    margin-top:10px;
+    font-size:0.82rem;
+    color:var(--chaser);
+    font-weight:bold;
+    letter-spacing:0.3px;
+  }
+
+  .belief-buttons{ display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+  .belief-btn{
+    padding:9px 10px;
+    border-radius:10px;
+    border:1px solid #333849;
+    background:#1d2230;
+    color:var(--text);
+    cursor:pointer;
+    font-family:inherit;
+    font-size:0.85rem;
+    text-align:left;
+    transition:transform 0.1s ease, border-color 0.2s ease, opacity 0.2s ease;
+  }
+  .belief-btn:hover:not(:disabled){ transform:translateY(-1px); }
+  .belief-btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  .belief-btn.active{
+    border-color:var(--accent);
+    background:linear-gradient(90deg, #1d2230, #232838);
+    box-shadow:0 0 0 1px var(--accent) inset;
+  }
+  .belief-btn small{ display:block; color:var(--muted); font-size:0.72rem; margin-top:2px; }
+  .belief-btn .cost{ float:right; color:var(--accent); font-weight:bold; font-size:0.75rem; }
+
+  #message{
+    margin-top:16px;
+    font-size:0.88rem;
+    line-height:1.4;
+    min-height:60px;
+    color:#cfd2e0;
+    font-style:italic;
+    border-top:1px dashed #2b3040;
+    padding-top:10px;
+  }
+
+  #reset-btn, #play-again{
+    margin-top:16px;
+    width:100%;
+    padding:9px;
+    border-radius:10px;
+    border:none;
+    background:#2a2f3d;
+    color:var(--text);
+    cursor:pointer;
+    font-family:inherit;
+    font-size:0.85rem;
+  }
+  #reset-btn:hover, #play-again:hover{ background:#343a4b; }
+
+  #maze-panel{ width:400px; text-align:center; }
+  #maze{
+    display:grid;
+    gap:0;
+    width:342px;
+    height:342px;
+    margin:10px auto;
+    background:#0e1017;
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .cell{
+    position:relative;
+    width:100%;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#161923;
+  }
+  .cell.fog{ background:#0a0b10; }
+  .cell.path{ background:rgba(225,91,91,0.10); }
+  .cell.path-fog{ background:radial-gradient(circle, rgba(225,91,91,0.28), #0a0b10 70%); }
+
+  .player{ color:var(--player); font-size:1.2rem; text-shadow:0 0 8px var(--player); z-index:3; }
+  .chaser{ color:var(--chaser); font-size:1.2rem; text-shadow:0 0 8px var(--chaser); z-index:2; animation:pulse 1s infinite ease-in-out; }
+  .exit{ color:#5fd68a; font-size:1.1rem; opacity:0.85; }
+  .clue{ color:#e8d16a; font-size:0.95rem; font-weight:bold; position:absolute; }
+
+  .controls{ margin-top:14px; }
+  .controls .row{ display:flex; justify-content:center; gap:6px; margin:4px 0; }
+  .ctl-btn{
+    width:42px; height:42px;
+    border-radius:10px;
+    border:1px solid #333849;
+    background:#1d2230;
+    color:var(--text);
+    font-size:1.1rem;
+    cursor:pointer;
+  }
+  .ctl-btn:hover{ border-color:var(--accent); }
+  .hint{ color:var(--muted); font-size:0.75rem; margin-top:8px; }
+
+  #encounter-panel{ width:400px; display:none; }
+  #encounter-text{ font-size:0.95rem; line-height:1.55; }
+  #encounter-text p.closing{ margin-top:14px; color:var(--muted); font-style:italic; font-size:0.85rem; }
+  #encounter-choices{ display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+  #encounter-choices button{
+    flex:1 1 45%;
+    padding:12px 8px;
+    border-radius:10px;
+    border:1px solid #333849;
+    background:#1d2230;
+    color:var(--text);
+    cursor:pointer;
+    font-family:inherit;
+  }
+  #encounter-choices button:hover{ border-color:var(--accent); }
+</style>
+</head>
+<body class="human-mode">
+
+<div class="layout">
+
+  <div class="panel" id="sidebar">
+    <h1>The Adversary</h1>
+    <div class="sub">A maze that never resolves.</div>
+
+    <div class="hud-row"><span>Maze</span><span class="hud-value" id="hud-level">1 / 3</span></div>
+    <div class="hud-row"><span>Belief</span><span class="hud-value" id="hud-belief">Human</span></div>
+    <div class="hud-row"><span>Clues (spendable)</span><span class="hud-value" id="hud-currency">0</span></div>
+    <div class="hud-row"><span>Convictions</span><span class="hud-value" id="hud-conv" style="font-size:0.75rem;">-</span></div>
+    <div id="threat"></div>
+
+    <div class="belief-buttons">
+      <button class="belief-btn" id="btn-human" onclick="trySpendBelief('human')">
+        <span class="cost" id="cost-human"></span>
+        He is Human <small>Calm, open maze. Easier to argue, agree, or reason with him.</small>
+      </button>
+      <button class="belief-btn" id="btn-madman" onclick="trySpendBelief('madman')">
+        <span class="cost" id="cost-madman"></span>
+        He is a Madman <small>Nearby walls shift and flicker. Better odds if you run or lash out.</small>
+      </button>
+      <button class="belief-btn" id="btn-enemy" onclick="trySpendBelief('enemy')">
+        <span class="cost" id="cost-enemy"></span>
+        He is the Enemy <small>Reveals part of the route to the exit and boosts attack odds — but he hunts twice as fast while you hold this belief.</small>
+      </button>
+    </div>
+
+    <div id="message">A maze unfolds before you. Somewhere within it, or beyond it, the adversary waits.</div>
+    <button id="reset-btn" onclick="newGame()">Reset</button>
+  </div>
+
+  <div class="panel" id="maze-panel">
+    <div id="maze"></div>
+    <div class="controls">
+      <div class="row"><button class="ctl-btn" onclick="attemptMove('N')">▲</button></div>
+      <div class="row">
+        <button class="ctl-btn" onclick="attemptMove('W')">◀</button>
+        <button class="ctl-btn" onclick="attemptMove('S')">▼</button>
+        <button class="ctl-btn" onclick="attemptMove('E')">▶</button>
+      </div>
+      <div class="hint">Arrow keys also work. You only see what you've visited, and a little around you. Red never hides.</div>
+    </div>
+  </div>
+
+  <div class="panel" id="encounter-panel">
+    <h1 id="encounter-title">The Final Room</h1>
+    <div id="encounter-text"></div>
+    <div id="encounter-choices">
+      <button onclick="resolveChoice('attack')">Attack</button>
+      <button onclick="resolveChoice('argue')">Argue</button>
+      <button onclick="resolveChoice('agree')">Agree</button>
+      <button onclick="resolveChoice('run')">Run</button>
+    </div>
+    <button id="play-again" style="display:none;" onclick="newGame()">Begin Again</button>
+  </div>
+
+</div>
+
+<script>
+/* =========================================================================
+   THE ADVERSARY — a small maze game
+   Themed loosely on Hans Keilson's "The Death of the Adversary": the
+   player never fully learns who the adversary is. Three mazes, three
+   beliefs (Human / Madman / Enemy), a chaser that is always visible even
+   through the fog, and one uncertain ending.
+
+   SECTIONS:
+   1. Constants & tunables
+   2. Game state
+   3. Maze generation (always solvable — spanning-tree carve)
+   4. Pathfinding helper (shared by chaser AI + Enemy-belief path reveal)
+   5. Belief effects: Human loops, Madman flicker, Enemy path preview
+   6. Clues (currency) & belief spending
+   7. Movement, the chaser, collisions, death
+   8. Rendering (with fog of war)
+   9. Final encounter
+   10. Game lifecycle (newMaze / newGame)
+   ========================================================================= */
+
+/* ---------------------- 1. Constants & tunables ---------------------- */
+const N = 6; // maze grid size (NxN)
+const DIRS = {
+  N: { dx: 0, dy: -1, opp: 'S' },
+  S: { dx: 0, dy: 1,  opp: 'N' },
+  E: { dx: 1, dy: 0,  opp: 'W' },
+  W: { dx: -1, dy: 0, opp: 'E' }
+};
+const SIDE_NAME = { N: 'Top', S: 'Bottom', E: 'Right', W: 'Left' };
+const ACCENTS = { human: '#4fa3d1', madman: '#b06fd6', enemy: '#e15b5b' };
+const LABELS  = { human: 'Human', madman: 'Madman', enemy: 'Enemy' };
+const ARTICLE = { human: 'a', madman: 'a', enemy: 'the' };
+
+// Tooltip text shown on hover, explaining what strengthening (reinforcing)
+// each belief actually does. {lvl} is replaced with the current conviction
+// level and {next} with the effect at the next level, computed live.
+const TOOLTIPS = {
+  human:  'Switch: see him as calm and reasonable — the maze opens up, with extra hidden passages only a Human believer can use.\n\nStrengthen: widens how far you can see beyond visited ground (up to +2 tiles), and slightly boosts Argue/Agree odds in the final encounter.',
+  madman: 'Switch: see him as unstable — nearby walls randomly flicker open and shut each move.\n\nStrengthen: widens the radius and frequency of the flickering walls, and at higher levels sharpens your paranoid awareness (+vision). Slightly boosts Run/Attack odds in the final encounter.',
+  enemy:  'Switch: see him as a direct threat — part of the route to the exit is revealed. But he hunts twice as fast while you hold this belief.\n\nStrengthen: reveals more steps of that route ahead of you, and slightly boosts Attack odds in the final encounter.'
+};
+
+const SWITCH_COST = 1;     // clues needed to change belief
+const MAX_CONVICTION = 6;
+// Strengthening cost rises with each level already held: the 1st point of
+// conviction costs 1 clue, the 2nd costs 2, the 3rd costs 3, and so on.
+function reinforceCost(name) { return state.convictions[name] + 1; }
+
+const CLUE_TEXTS = [
+  "A torn letter: \"He wept once, over something small. Or so they say.\"",
+  "Scratched into stone: \"HE KNOWS. HE ALWAYS KNOWS.\"",
+  "A child's drawing: a smiling face, teeth like little knives.",
+  "A burnt clipping: \"Local man denies everything, calmly.\"",
+  "A photograph with the face scratched out entirely.",
+  "A ledger, meticulous, every entry in the same steady hand.",
+  "Graffiti, half-erased: \"he is not what you think, he is worse, he is nothing\"",
+  "A pressed flower tucked in a stranger's coat pocket."
+];
+let cluePool = [];
+
+const BELIEF_STATS = {
+  human:  { attack: 0.22, argue: 0.65, agree: 0.55, run: 0.35 },
+  madman: { attack: 0.45, argue: 0.20, agree: 0.20, run: 0.68 },
+  enemy:  { attack: 0.68, argue: 0.15, agree: 0.10, run: 0.40 }
+};
+const ENDINGS = {
+  attack: {
+    success: "Your blade finds him. But his eyes hold no fear — only recognition, as if you'd finally become what he always suspected you were.",
+    fail:    "You strike, but there is no one there. Only your own breath, loud in the dark, and the sense that you swung at a mirror."
+  },
+  argue: {
+    success: "Your words land somewhere true. He nods — or perhaps only the shadows behind him nod for him.",
+    fail:    "You speak until your voice cracks. He listens with a face you cannot read, and says nothing at all."
+  },
+  agree: {
+    success: "You lower your guard. For one strange moment you are almost friends, almost understood, almost safe.",
+    fail:    "You yield, and the ground of your certainty gives way beneath you."
+  },
+  run: {
+    success: "You run, and the maze — for once — lets you go. Somewhere behind you, he is still deciding who you were.",
+    fail:    "You run, but every corridor curves back to him. There was never anywhere else to go."
+  }
+};
+const CLOSING_LINE = "Whether man, madman, or enemy — the truth walks on, unresolved. You were never meant to be certain. Perhaps that was always the point.";
+const DEATH_TEXT = "He reaches you before you ever reach him. There is no argument left, no belief that saves you now.";
+
+/* ---------------------------- 2. Game state ---------------------------- */
+let state = {
+  level: 1,
+  maze: null,
+  player: { x: 0, y: 0 },
+  exit: { x: N - 1, y: N - 1 },
+  belief: 'human',
+  convictions: { human: 0, madman: 0, enemy: 0 },
+  clueCurrency: 0,
+  clues: [],
+  visited: new Set(),
+  flicker: { open: new Set(), closed: new Set() },
+  chaser: { x: 0, y: 0 },
+  chaserActive: false,
+  moveCount: 0,
+  finalStage: false,
+  dead: false
+};
+
+/* --------------------- 3. Maze generation (solvable) -------------------- */
+function generateMaze() {
+  const cells = [];
+  for (let y = 0; y < N; y++) {
+    const row = [];
+    for (let x = 0; x < N; x++) {
+      row.push({ N: false, S: false, E: false, W: false, hN: false, hS: false, hE: false, hW: false });
+    }
+    cells.push(row);
+  }
+  const visited = Array.from({ length: N }, () => Array(N).fill(false));
+  const stack = [{ x: 0, y: 0 }];
+  visited[0][0] = true;
+
+  while (stack.length) {
+    const cur = stack[stack.length - 1];
+    const options = [];
+    for (const dir of Object.keys(DIRS)) {
+      const { dx, dy } = DIRS[dir];
+      const nx = cur.x + dx, ny = cur.y + dy;
+      if (nx >= 0 && nx < N && ny >= 0 && ny < N && !visited[ny][nx]) options.push({ dir, nx, ny });
+    }
+    if (options.length) {
+      const pick = options[Math.floor(Math.random() * options.length)];
+      cells[cur.y][cur.x][pick.dir] = true;
+      cells[pick.ny][pick.nx][DIRS[pick.dir].opp] = true;
+      visited[pick.ny][pick.nx] = true;
+      stack.push({ x: pick.nx, y: pick.ny });
+    } else {
+      stack.pop();
+    }
+  }
+
+  // Human-only extra loop openings (unchanged from original design).
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      for (const dir of Object.keys(DIRS)) {
+        const { dx, dy, opp } = DIRS[dir];
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < N && ny >= 0 && ny < N && !cells[y][x][dir] && Math.random() < 0.10) {
+          cells[y][x]['h' + dir] = true;
+          cells[ny][nx]['h' + opp] = true;
+        }
+      }
+    }
+  }
+  return cells;
+}
+
+// Pure structural openness — ignores belief. Used by the chaser AI so it
+// hunts through the "real" maze regardless of how the player perceives it.
+function baseOpen(x, y, dir) { return state.maze[y][x][dir]; }
+
+// Belief-aware openness — what the PLAYER can actually walk through.
+function isOpen(x, y, dir) {
+  const cell = state.maze[y][x];
+  let open = cell[dir];
+  if (state.belief === 'human' && cell['h' + dir]) open = true;
+  if (state.belief === 'madman') {
+    const k = x + ',' + y + ',' + dir;
+    if (state.flicker.closed.has(k)) open = false;
+    else if (state.flicker.open.has(k)) open = true;
+  }
+  return open;
+}
+
+/* ------------------------- 4. Shared pathfinding ------------------------ */
+function bfsPath(sx, sy, gx, gy, opennessFn) {
+  const key = (x, y) => x + ',' + y;
+  const prev = {};
+  const seen = new Set([key(sx, sy)]);
+  const queue = [{ x: sx, y: sy }];
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur.x === gx && cur.y === gy) break;
+    for (const dir of Object.keys(DIRS)) {
+      if (!opennessFn(cur.x, cur.y, dir)) continue;
+      const dd = DIRS[dir];
+      const nx = cur.x + dd.dx, ny = cur.y + dd.dy;
+      if (nx < 0 || nx >= N || ny < 0 || ny >= N) continue;
+      const k = key(nx, ny);
+      if (!seen.has(k)) { seen.add(k); prev[k] = { x: cur.x, y: cur.y }; queue.push({ x: nx, y: ny }); }
+    }
+  }
+  const gk = key(gx, gy);
+  if (!seen.has(gk)) return [];
+  let path = [];
+  let cur = { x: gx, y: gy };
+  while (!(cur.x === sx && cur.y === sy)) { path.push(cur); cur = prev[key(cur.x, cur.y)]; }
+  return path.reverse(); // ordered steps from start+1 ... goal
+}
+
+/* ------------------------- 5. Belief effects ---------------------------- */
+// Vision radius: how far the player can see beyond visited ground.
+function getVisionRadius() {
+  let r = 1;
+  if (state.belief === 'human')  r += Math.min(2, Math.floor(state.convictions.human / 3));
+  if (state.belief === 'madman') r += Math.min(1, Math.floor(state.convictions.madman / 4));
+  return r;
+}
+
+// Madman: recompute which nearby walls are (temporarily) flipped.
+function updateMadmanFlicker() {
+  state.flicker = { open: new Set(), closed: new Set() };
+  if (state.belief !== 'madman') return;
+  const radius = 2 + Math.floor(state.convictions.madman / 3);
+  const chance = Math.min(0.5, 0.25 + state.convictions.madman * 0.03);
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      if (Math.abs(x - state.player.x) + Math.abs(y - state.player.y) > radius) continue;
+      for (const dir of Object.keys(DIRS)) {
+        const dd = DIRS[dir];
+        const nx = x + dd.dx, ny = y + dd.dy;
+        if (nx < 0 || nx >= N || ny < 0 || ny >= N) continue;
+        if (Math.random() >= chance) continue;
+        const k = x + ',' + y + ',' + dir;
+        const nk = nx + ',' + ny + ',' + dd.opp;
+        if (state.maze[y][x][dir]) { state.flicker.closed.add(k); state.flicker.closed.add(nk); }
+        else { state.flicker.open.add(k); state.flicker.open.add(nk); }
+      }
+    }
+  }
+}
+
+// Enemy: partial path preview toward the exit.
+function getEnemyPathPreview() {
+  const full = bfsPath(state.player.x, state.player.y, state.exit.x, state.exit.y, isOpen);
+  const len = Math.min(full.length, 3 + Math.floor(state.convictions.enemy / 2));
+  return full.slice(0, len);
+}
+
+/* --------------------- 6. Clues (currency) & spending -------------------- */
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function nextClueText() {
+  if (cluePool.length === 0) cluePool = shuffle([...CLUE_TEXTS]);
+  return cluePool.pop();
+}
+function placeClues() {
+  const count = 3 + Math.floor(Math.random() * 3); // 3-5
+  const used = new Set(['0,0', (N - 1) + ',' + (N - 1)]);
+  state.clues = [];
+  while (state.clues.length < count) {
+    const x = Math.floor(Math.random() * N);
+    const y = Math.floor(Math.random() * N);
+    const k = x + ',' + y;
+    if (used.has(k)) continue;
+    used.add(k);
+    state.clues.push({ x, y, text: nextClueText(), collected: false });
+  }
+}
+function checkClue() {
+  const clue = state.clues.find(c => c.x === state.player.x && c.y === state.player.y && !c.collected);
+  if (clue) {
+    clue.collected = true;
+    state.clueCurrency++;
+    showMessage(clue.text + ' (+1 clue to spend)');
+  }
+}
+
+function trySpendBelief(name) {
+  if (state.finalStage || state.dead) return;
+  const isCurrent = state.belief === name;
+  const cost = isCurrent ? reinforceCost(name) : SWITCH_COST;
+  if (state.clueCurrency < cost) {
+    showMessage(`Not enough clues to ${isCurrent ? 'strengthen' : 'switch to'} this belief. Needs ${cost}.`);
+    return;
+  }
+  if (isCurrent && state.convictions[name] >= MAX_CONVICTION) {
+    showMessage('This conviction cannot grow any deeper.');
+    return;
+  }
+  state.clueCurrency -= cost;
+  if (isCurrent) {
+    state.convictions[name]++;
+    showMessage(`Conviction deepens. He is ${ARTICLE[name]} ${LABELS[name]}, more certainly than before.`);
+  } else {
+    state.belief = name;
+    document.documentElement.style.setProperty('--accent', ACCENTS[name]);
+    document.body.className = name + '-mode';
+    showMessage(`You reconsider. Perhaps he is ${ARTICLE[name]} ${LABELS[name]} after all.`);
+  }
+  updateMadmanFlicker();
+  render();
+}
+
+/* ------------------- 7. Movement, chaser, collisions, death -------------- */
+function attemptMove(dir) {
+  if (state.finalStage || state.dead) return;
+  if (!isOpen(state.player.x, state.player.y, dir)) {
+    showMessage('A wall. Solid, at least, for now.');
+    return;
+  }
+  const d = DIRS[dir];
+  state.player.x += d.dx;
+  state.player.y += d.dy;
+  state.visited.add(state.player.x + ',' + state.player.y);
+  state.moveCount++;
+
+  if (state.belief === 'madman') updateMadmanFlicker();
+
+  // The chaser begins hunting after the player's second move.
+  if (state.moveCount >= 2) state.chaserActive = true;
+
+  // Did the player walk straight into it?
+  if (state.chaserActive && checkCollision()) { triggerDeath(); render(); return; }
+
+  checkClue();
+
+  if (state.player.x === state.exit.x && state.player.y === state.exit.y) {
+    handleExit();
+    return;
+  }
+
+  // Chaser cadence: one step every player move. But while the player
+  // believes he is the Enemy, framing him as a direct threat makes him
+  // hunt twice as fast — two steps every single player move.
+  if (state.chaserActive) {
+    if (chaserStep()) { triggerDeath(); render(); return; }
+    if (state.belief === 'enemy') {
+      if (chaserStep()) { triggerDeath(); render(); return; }
+    }
+  }
+
+  render();
+}
+
+// Moves the chaser one cell toward the player and reports whether that
+// step caused a collision (so callers can bail out immediately).
+function chaserStep() {
+  moveChaser();
+  return checkCollision();
+}
+
+function moveChaser() {
+  const path = bfsPath(state.chaser.x, state.chaser.y, state.player.x, state.player.y, baseOpen);
+  if (path.length) { state.chaser.x = path[0].x; state.chaser.y = path[0].y; }
+}
+
+function checkCollision() {
+  return state.chaser.x === state.player.x && state.chaser.y === state.player.y;
+}
+
+function triggerDeath() {
+  state.dead = true;
+  document.getElementById('maze-panel').style.display = 'none';
+  document.getElementById('encounter-panel').style.display = 'block';
+  document.getElementById('encounter-title').textContent = 'Caught';
+  document.getElementById('encounter-choices').style.display = 'none';
+  document.getElementById('encounter-text').innerHTML =
+    `<p>${DEATH_TEXT}</p><p class="closing">${CLOSING_LINE}</p>`;
+  document.getElementById('play-again').style.display = 'inline-block';
+}
+
+// Farthest-cell spawn: chaser starts as far from the entrance as the
+// structural maze allows, so early moves are always safe.
+function spawnChaser() {
+  const dist = Array.from({ length: N }, () => Array(N).fill(-1));
+  dist[0][0] = 0;
+  const queue = [{ x: 0, y: 0 }];
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const dir of Object.keys(DIRS)) {
+      if (!baseOpen(cur.x, cur.y, dir)) continue;
+      const dd = DIRS[dir];
+      const nx = cur.x + dd.dx, ny = cur.y + dd.dy;
+      if (nx < 0 || nx >= N || ny < 0 || ny >= N) continue;
+      if (dist[ny][nx] === -1) { dist[ny][nx] = dist[cur.y][cur.x] + 1; queue.push({ x: nx, y: ny }); }
+    }
+  }
+  let best = { x: N - 1, y: N - 1, d: -1 };
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (dist[y][x] > best.d) best = { x, y, d: dist[y][x] };
+  state.chaser = { x: best.x, y: best.y };
+}
+
+function handleExit() {
+  if (state.level < 3) {
+    state.level++;
+    showMessage('You step through the exit. Another maze awaits — no clearer than the last.');
+    newMaze();
+  } else {
+    startFinalEncounter();
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  const map = { ArrowUp: 'N', ArrowDown: 'S', ArrowLeft: 'W', ArrowRight: 'E' };
+  if (map[e.key]) { e.preventDefault(); attemptMove(map[e.key]); }
+});
+
+/* ---------------------- 8. Rendering (fog of war) ------------------------ */
+function render() {
+  const grid = document.getElementById('maze');
+  grid.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+  grid.innerHTML = '';
+
+  const vr = getVisionRadius();
+  const pathPreview = state.belief === 'enemy' ? getEnemyPathPreview() : [];
+  const pathSet = new Set(pathPreview.map(p => p.x + ',' + p.y));
+
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const key = x + ',' + y;
+      const visited = state.visited.has(key);
+      const nearby = Math.max(Math.abs(x - state.player.x), Math.abs(y - state.player.y)) <= vr;
+      const visible = visited || nearby;
+
+      const div = document.createElement('div');
+      div.className = 'cell' + (visible ? '' : ' fog');
+
+      if (visible) {
+        const cell = state.maze[y][x];
+        ['N', 'E', 'S', 'W'].forEach(dir => {
+          const open = isOpen(x, y, dir);
+          const humanOnly = !cell[dir] && cell['h' + dir] && state.belief === 'human';
+          let style;
+          if (open) style = humanOnly ? '3px dashed var(--accent)' : '3px solid transparent';
+          else style = '3px solid var(--wall)';
+          div.style['border' + SIDE_NAME[dir]] = style;
+        });
+        if (pathSet.has(key)) div.classList.add('path');
+
+        if (x === state.exit.x && y === state.exit.y) {
+          const s = document.createElement('span'); s.className = 'exit'; s.textContent = '▣';
+          div.appendChild(s);
+        }
+        const clue = state.clues.find(c => c.x === x && c.y === y && !c.collected);
+        if (clue) {
+          const s = document.createElement('span'); s.className = 'clue'; s.textContent = '?';
+          div.appendChild(s);
+        }
+      } else if (pathSet.has(key)) {
+        div.classList.add('path-fog');
+      }
+
+      // The chaser pierces the fog — always visible.
+      if (state.chaser.x === x && state.chaser.y === y) {
+        const s = document.createElement('span'); s.className = 'chaser'; s.textContent = '●';
+        div.appendChild(s);
+      }
+      // The player is always visible on their own tile.
+      if (state.player.x === x && state.player.y === y) {
+        const s = document.createElement('span'); s.className = 'player'; s.textContent = '●';
+        div.appendChild(s);
+      }
+      grid.appendChild(div);
+    }
+  }
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('hud-level').textContent = state.level + ' / 3';
+  document.getElementById('hud-belief').textContent = LABELS[state.belief];
+  document.getElementById('hud-currency').textContent = state.clueCurrency;
+  document.getElementById('hud-conv').textContent =
+    `H ${state.convictions.human} · M ${state.convictions.madman} · E ${state.convictions.enemy}`;
+
+  ['human', 'madman', 'enemy'].forEach(name => {
+    const btn = document.getElementById('btn-' + name);
+    const isCurrent = state.belief === name;
+    btn.classList.toggle('active', isCurrent);
+    const cost = isCurrent ? reinforceCost(name) : SWITCH_COST;
+    document.getElementById('cost-' + name).textContent =
+      isCurrent ? `Strengthen (${cost})` : `Switch (${cost})`;
+    btn.disabled = state.clueCurrency < cost || (isCurrent && state.convictions[name] >= MAX_CONVICTION) || state.finalStage || state.dead;
+    btn.title = TOOLTIPS[name] + `\n\nCurrent conviction: ${state.convictions[name]} / ${MAX_CONVICTION}`;
+  });
+
+  const threat = document.getElementById('threat');
+  if (!state.chaserActive) {
+    threat.style.display = 'none';
+  } else {
+    threat.style.display = 'block';
+    const dist = Math.abs(state.chaser.x - state.player.x) + Math.abs(state.chaser.y - state.player.y);
+    let text;
+    if (dist <= 1) { text = '⚠ He is right behind you.'; threat.style.opacity = '1'; }
+    else if (dist <= 3) { text = '⚠ He is close.'; threat.style.opacity = '0.85'; }
+    else { text = '⚠ He is hunting you.'; threat.style.opacity = '0.6'; }
+    threat.textContent = text;
+  }
+}
+
+function showMessage(text) { document.getElementById('message').textContent = text; }
+
+/* --------------------------- 9. Final encounter --------------------------- */
+function startFinalEncounter() {
+  state.finalStage = true;
+  document.getElementById('maze-panel').style.display = 'none';
+  document.getElementById('encounter-panel').style.display = 'block';
+  document.getElementById('encounter-title').textContent = 'The Final Room';
+  document.getElementById('encounter-choices').style.display = 'flex';
+  document.getElementById('play-again').style.display = 'none';
+  document.getElementById('encounter-text').innerHTML =
+    '<p>Three mazes, three doors, and still you do not know him. He stands before you now — ' +
+    'a human face, a madman\'s eyes, an enemy\'s stillness, all at once. What do you do?</p>';
+  showMessage('The maze has ended. Only the choice remains.');
+  updateHUD();
+}
+
+function resolveChoice(choice) {
+  const base = BELIEF_STATS[state.belief][choice];
+  const bonus = Math.min(state.convictions[state.belief] * 0.02, 0.15);
+  const chance = Math.min(0.92, Math.max(0.05, base + bonus));
+  const success = Math.random() < chance;
+  const outcome = ENDINGS[choice][success ? 'success' : 'fail'];
+  document.getElementById('encounter-text').innerHTML = `<p>${outcome}</p><p class="closing">${CLOSING_LINE}</p>`;
+  document.getElementById('encounter-choices').style.display = 'none';
+  document.getElementById('play-again').style.display = 'inline-block';
+}
+
+/* --------------------------- 10. Game lifecycle --------------------------- */
+function newMaze() {
+  state.maze = generateMaze();
+  state.player = { x: 0, y: 0 };
+  state.visited = new Set(['0,0']);
+  state.moveCount = 0;
+  state.chaserActive = false;
+  state.flicker = { open: new Set(), closed: new Set() };
+  spawnChaser();
+  placeClues();
+  if (state.belief === 'madman') updateMadmanFlicker();
+  render();
+}
+
+function newGame() {
+  state.level = 1;
+  state.belief = 'human';
+  state.convictions = { human: 0, madman: 0, enemy: 0 };
+  state.clueCurrency = 0;
+  state.finalStage = false;
+  state.dead = false;
+
+  document.documentElement.style.setProperty('--accent', ACCENTS.human);
+  document.body.className = 'human-mode';
+  document.getElementById('maze-panel').style.display = '';
+  document.getElementById('encounter-panel').style.display = 'none';
+
+  newMaze();
+  showMessage('A maze unfolds before you. Somewhere within it, or beyond it, the adversary waits.');
+}
+
+newGame();
+</script>
+</body>
+</html>
