@@ -291,13 +291,13 @@ function reinforceCost(name) { return state.convictions[name] + 1; }
 
 const CLUE_TEXTS = [
   "A torn letter: \"He wept once, over something small. Or so they say.\"",
-  "Scratched into stone: \"HE KNOWS. HE ALWAYS KNOWS.\"",
-  "A child's drawing: a smiling face, teeth like little knives.",
-  "A burnt clipping: \"Local man denies everything, calmly.\"",
-  "A photograph with the face scratched out entirely.",
-  "A ledger, meticulous, every entry in the same steady hand.",
-  "Graffiti, half-erased: \"he is not what you think, he is worse, he is nothing\"",
-  "A pressed flower tucked in a stranger's coat pocket."
+  "Graffiti into the wall of a neighbor\'s shop, celebrating your Adversary.",
+  "The devotion of your only \"friend\" to the Adversary tears you two apart. Are you truly an elk with no wolf, a prey who dies with no predator?",
+  "You listen in another room to the insensate, howl-like preaching of your Adversary. Is he mad?",
+  "A photograph of your Adversary: a rather plain man's face. Is he reasonable, or is he hiding something?",
+  "A note in a stranger's handwriting: \"He is not what you think, he is worse, he is nothing.\"",
+  "A man claims to have the same Adversary, but he speaks of violence and revolution. You do not trust him.",
+  "You see a parade for you Adversary, and you imagine ending him with a rifle\'s bullet."
 ];
 let cluePool = [];
 
@@ -308,23 +308,23 @@ const BELIEF_STATS = {
 };
 const ENDINGS = {
   attack: {
-    success: "Your blade finds him. But his eyes hold no fear — only recognition, as if you'd finally become what he always suspected you were.",
-    fail:    "You strike, but there is no one there. Only your own breath, loud in the dark, and the sense that you swung at a mirror."
+    success: "Your blade finds him, but his eyes hold no fear. Only recognition, as if you'd finally become what he always suspected you were. The carousel of hatred continues.",
+    fail:    "You strike, but there is no one there. Only your own breath, loud in the dark, and the sense that you swung at a mirror. The carousel of hatred continues."
   },
   argue: {
-    success: "Your words land somewhere true. He nods — or perhaps only the shadows behind him nod for him.",
-    fail:    "You speak until your voice cracks. He listens with a face you cannot read, and says nothing at all."
+    success: "Your words land somewhere true. Yet his voice comes from somewhere else — a place you cannot reach.",
+    fail:    "You shout until your voice cracks. He does not hear you."
   },
   agree: {
-    success: "You lower your guard. For one strange moment you are almost friends, almost understood, almost safe.",
-    fail:    "You yield, and the ground of your certainty gives way beneath you."
+    success: "You lower your guard. He is your beloved enemy. Maybe you will take his daughter to wife and bear a three-legged unnatural monstrosity.",
+    fail:    "You yield, and the ground of your certainty gives way beneath you. Are you really an elk with no wolf, a prey who dies with no predator?"
   },
   run: {
-    success: "You run, and the maze — for once — lets you go. Somewhere behind you, he is still deciding who you were.",
-    fail:    "You run, but every corridor curves back to him. There was never anywhere else to go."
+    success: "You ignore him, but the world continues to worship him around you. Soon he is ruler of your land. And soon he is dead.",
+    fail:    "You run, but every path curves back to him. There was never anywhere else to go. He is your destiny."
   }
 };
-const CLOSING_LINE = "Whether man, madman, or enemy — the truth walks on, unresolved. You were never meant to be certain. Perhaps that was always the point.";
+const CLOSING_LINE = "Whether man, madman, or enemy, the truth walks on, unresolved. You were never able to be certain, and you never will be.";
 const DEATH_TEXT = "He reaches you before you ever reach him. There is no argument left, no belief that saves you now.";
 
 /* ---------------------------- 2. Game state ---------------------------- */
