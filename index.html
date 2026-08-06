@@ -106,6 +106,26 @@
     padding-top:10px;
   }
 
+  .size-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-top:16px;
+    padding-top:10px;
+    border-top:1px dashed #2b3040;
+    font-size:0.85rem;
+  }
+  .size-row label{ color:var(--muted); }
+  .size-row select{
+    background:#1d2230;
+    color:var(--text);
+    border:1px solid #333849;
+    border-radius:8px;
+    padding:5px 8px;
+    font-family:inherit;
+    font-size:0.82rem;
+  }
+
   #reset-btn, #play-again{
     margin-top:16px;
     width:100%;
@@ -210,6 +230,21 @@
     </div>
 
     <div id="message">A maze unfolds before you. Somewhere within it, or beyond it, the adversary waits.</div>
+
+    <div class="size-row">
+      <label for="size-select">Maze size</label>
+      <select id="size-select" onchange="changeMazeSize(this.value)">
+        <option value="4">4 × 4</option>
+        <option value="5">5 × 5</option>
+        <option value="6" selected>6 × 6</option>
+        <option value="7">7 × 7</option>
+        <option value="8">8 × 8</option>
+        <option value="9">9 × 9</option>
+        <option value="10">10 × 10</option>
+      </select>
+    </div>
+    <div class="hint" style="margin-bottom:10px;">Changing size starts a new run.</div>
+
     <button id="reset-btn" onclick="newGame()">Reset</button>
   </div>
 
@@ -262,7 +297,7 @@
    ========================================================================= */
 
 /* ---------------------- 1. Constants & tunables ---------------------- */
-const N = 6; // maze grid size (NxN)
+let N = 6; // maze grid size (NxN) — changeable via the size selector
 const DIRS = {
   N: { dx: 0, dy: -1, opp: 'S' },
   S: { dx: 0, dy: 1,  opp: 'N' },
@@ -468,6 +503,44 @@ function updateMadmanFlicker() {
       }
     }
   }
+  ensurePlayerNotEnclosed();
+}
+
+// Safety net for Madman mode: the flicker above is random and could, in
+// theory, close every side around the player at once. That's the one
+// outcome we never allow — it would be an unwinnable trap, not tension.
+// If it happens, force one side back open (preferring a side that's
+// structurally passable and only closed by the flicker itself).
+function ensurePlayerNotEnclosed() {
+  const { x, y } = state.player;
+  const dirs = ['N', 'S', 'E', 'W'];
+  if (dirs.some(d => isOpen(x, y, d))) return; // already fine
+
+  let candidate = dirs.find(d => {
+    const dd = DIRS[d];
+    const nx = x + dd.dx, ny = y + dd.dy;
+    if (nx < 0 || nx >= N || ny < 0 || ny >= N) return false;
+    const structurallyOpen = state.maze[y][x][d] || (state.belief === 'human' && state.maze[y][x]['h' + d]);
+    return structurallyOpen && state.flicker.closed.has(x + ',' + y + ',' + d);
+  });
+  if (!candidate) {
+    // Fallback: just pick any in-bounds direction and force it open.
+    candidate = dirs.find(d => {
+      const dd = DIRS[d];
+      const nx = x + dd.dx, ny = y + dd.dy;
+      return nx >= 0 && nx < N && ny >= 0 && ny < N;
+    });
+  }
+  if (candidate) {
+    const dd = DIRS[candidate];
+    const nx = x + dd.dx, ny = y + dd.dy;
+    const k = x + ',' + y + ',' + candidate;
+    const nk = nx + ',' + ny + ',' + dd.opp;
+    state.flicker.closed.delete(k);
+    state.flicker.closed.delete(nk);
+    state.flicker.open.add(k);
+    state.flicker.open.add(nk);
+  }
 }
 
 // Enemy: partial path preview toward the exit.
@@ -490,7 +563,10 @@ function nextClueText() {
   return cluePool.pop();
 }
 function placeClues() {
-  const count = 3 + Math.floor(Math.random() * 3); // 3-5
+  // Base clue count scales gently with maze size (3-5 at N=6, more for
+  // bigger mazes, never fewer than 3).
+  const base = Math.max(3, Math.round(N * 0.6));
+  const count = base + Math.floor(Math.random() * 3);
   const used = new Set(['0,0', (N - 1) + ',' + (N - 1)]);
   state.clues = [];
   while (state.clues.length < count) {
@@ -783,6 +859,7 @@ function newGame() {
   state.clueCurrency = 0;
   state.finalStage = false;
   state.dead = false;
+  state.exit = { x: N - 1, y: N - 1 }; // recompute in case N changed
 
   document.documentElement.style.setProperty('--accent', ACCENTS.human);
   document.body.className = 'human-mode';
@@ -791,6 +868,13 @@ function newGame() {
 
   newMaze();
   showMessage('A maze unfolds before you. Somewhere within it, or beyond it, the adversary waits.');
+}
+
+// Called from the size <select> in the sidebar. Changing size always
+// starts a fresh run, since an in-progress maze can't be resized cleanly.
+function changeMazeSize(value) {
+  N = parseInt(value, 10);
+  newGame();
 }
 
 newGame();
